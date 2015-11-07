@@ -83,6 +83,29 @@ float thru_sdss_u (const MArray<float,1>& l, const MArray<float,1>& f)
 
 }
 
+float thru_sdss_r (const MArray<float,1>& l, const MArray<float,1>& f)
+{
+  //r filter wavelengths and transmission
+  MArray<float,1> lr (15), r (15);
+  lr = 5380.0f,5505.0f,5630.0f,5755.0f,5880.0f,6005.0f,6130.0f,6255.0f,6380.0f,6505.0f,6630.0f,6755.0f,6880.0f,7005.0f,7130.0f;
+  r =0.0f,0.09230f, 0.33950f, 0.47230f, 0.5080f, 0.52130f, 0.51970f, 0.52750f, 0.53160f, 0.5290f, 0.50570f, 0.24880f,0.02470f,0.00410f,0.0010f;
+
+   const int nr = r.nelements();
+   const int xmin = find_closest_index (l, lr (1));
+   const int xmax = find_closest_index (l, lr (nr));
+   float sumf = 0, sumr = 0;
+   for (int i = xmin; i<=xmax; ++i)
+   {
+      const float dw = (i>xmin+1 ? (l (i)-l (i-1)) : l (xmin+1)-l (xmin));
+      float rint = lin_interp (r, lr, l (i)); //interpolate transmission to spectrum's wavelength array
+      sumr += rint*dw;  
+      sumf += rint*f (i)*dw;
+   }
+   return sumf/sumr; //approximate integration of flux in bandpass
+
+}
+
+
 int main (int argc, char** argv)
 {
    // set options with commandline
@@ -122,8 +145,9 @@ int main (int argc, char** argv)
    float c = 2.99792458e+18; //speed of light in A
    float lambda_g = 4694.35; //sdss g central wavelength   
    float lambda_u = 3551.0; //sdss u central wavelength
-   float nu, fnu_u, mag_u, ng, fnu_g, mag_g;
-   string fout = "T03500_T10500_ug.dat"; //output file will contain model name and u-g color
+   float lambda_r = 6165.0; //sdss r central wavelength
+   float nu, fnu_u, mag_u, ng, fnu_g, mag_g, nr, fnu_r, mag_r;
+   string fout = g.modlist+".ugr"; //output file will contain model name and colors
    std::ofstream outf (fout.c_str ());  //TODO: change so fout is not hardcoded but depends on modlist
    outf << "#modname norm_u fnu_u mag_u norm_g fnu_g mag_g mag_u-mag_g"<<endl;
 
@@ -136,9 +160,12 @@ int main (int argc, char** argv)
        ng = thru_sdss_g(wvl,fitsarray(ltl::Range::all (),i)); //get f_lambda thru g filter
        fnu_g = (ng *lambda_g * lambda_g) / c; //convert f_lambda to f_nu
        mag_g = -2.5*log10(fnu_g); //convert f_nu to g magnitude
-       outf << modnames[i-1] << " " << mag_u - mag_g <<endl; //write to file
+       nr = thru_sdss_r(wvl,fitsarray(ltl::Range::all (),i)); //get f_lambda thru r filter
+       fnu_r = (nr *lambda_r * lambda_r) / c; //convert f_lambda to f_nu
+       mag_r = -2.5*log10(fnu_r); //convert f_nu to r magnitude
+       outf << modnames[i-1] << " " << mag_u - mag_g << " "<< mag_g - mag_r <<endl; //write to file
      }
-   
+  
 
    } catch (exception& e)
    {
